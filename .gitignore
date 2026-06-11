@@ -1,0 +1,14 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+
+# Environments
+.env
+venv/
+env/
+
+# Project Specific
+students.db
+exports/
+*.pdf
+*.csv
