@@ -524,3 +524,7 @@ def validate_student_fields(roll: str, name: str) -> None:
         raise ValueError("Roll number is required.")
     if not name or not name.strip():
         raise ValueError("Student name is required.")
+    if len(name) > 100:
+        raise ValueError("Student name must be less than 100 characters.")
+    if len(roll) > 50:
+        raise ValueError("Roll number must be less than 50 characters.")

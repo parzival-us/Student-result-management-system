@@ -33,17 +33,16 @@ class App(tk.Tk):
         self.geometry("1280x800")
         self.minsize(1050, 650)
         self.configure(bg=THEME["bg"])
-        
-        try:
-            # Hide default window decorations for a custom title bar look if desired,
-            # or just rely on standard decorations for now.
-            pass
-        except Exception:
-            pass
 
-        self.db = Database()
+        try:
+            self.db = Database()
+        except Exception as e:
+            messagebox.showerror("Database Error", f"Failed to initialize database:\n{str(e)}")
+            self.destroy()
+            return
+
         self._configure_styles()
-        
+
         # Main layout container
         self.main_container = tk.Frame(self, bg=THEME["bg"])
         self.main_container.pack(fill="both", expand=True)
@@ -53,7 +52,7 @@ class App(tk.Tk):
 
         self.current_frame = None
         self.active_nav = None
-        
+
         # Start app
         self.show_frame(DashboardFrame)
         self.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -295,26 +294,26 @@ class App(tk.Tk):
     def _export_csv(self):
         ranked = self.db.get_ranked_students()
         if not ranked:
-            messagebox.showwarning("No Data", "No student data to export.", parent=self)
+            messagebox.showwarning("No Data", "No student data to export. Add students with marks first.", parent=self)
             return
         try:
             path = export_to_csv(ranked)
-            messagebox.showinfo("Success", f"Data exported to:\n{path}", parent=self)
+            messagebox.showinfo("Success", f"Data exported successfully!\n\n{path}", parent=self)
         except Exception as e:
-            messagebox.showerror("Error", str(e), parent=self)
+            messagebox.showerror("Export Error", f"Failed to export CSV:\n{str(e)}", parent=self)
 
     def _export_all_pdfs(self):
         ranked = self.db.get_ranked_students()
         if not ranked:
-            messagebox.showwarning("No Data", "No student data to export.", parent=self)
+            messagebox.showwarning("No Data", "No student data to export. Add students with marks first.", parent=self)
             return
         try:
             path = export_all_to_pdf(ranked)
-            messagebox.showinfo("Success", f"Reports generated:\n{path}", parent=self)
+            messagebox.showinfo("Success", f"Reports generated successfully!\n\n{path}", parent=self)
         except ImportError:
-            messagebox.showerror("Missing Dependency", "fpdf2 is required. Run: pip install fpdf2", parent=self)
+            messagebox.showerror("Missing Dependency", "fpdf2 is required for PDF export.\n\nRun: pip install fpdf2", parent=self)
         except Exception as e:
-            messagebox.showerror("Error", str(e), parent=self)
+            messagebox.showerror("Export Error", f"Failed to generate reports:\n{str(e)}", parent=self)
 
     def _on_close(self):
         try:

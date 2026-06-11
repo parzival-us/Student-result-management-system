@@ -298,5 +298,8 @@ class Database:
 
     def close(self):
         """Safely close the database connection."""
-        if self.connection:
-            self.connection.close()
+        try:
+            if self.connection:
+                self.connection.close()
+        except Exception:
+            pass

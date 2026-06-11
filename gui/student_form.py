@@ -36,7 +36,7 @@ class StudentListFrame(tk.Frame):
         # ── Toolbar ───────────────────────────────────────────────
         toolbar, toolbar_inner = StyledWidgets.create_card(self)
         toolbar.pack(fill="x", padx=40, pady=(0, 20))
-        
+
         # We want less padding for the toolbar card
         toolbar_inner.pack_configure(pady=(12, 12))
 
@@ -49,6 +49,9 @@ class StudentListFrame(tk.Frame):
             toolbar_inner, placeholder="Search students by name or roll number...", width=50
         )
         self.search_entry.pack(side="left", ipady=6, fill="x", expand=True)
+
+        clear_btn = StyledWidgets.create_button(toolbar_inner, "Clear", bg=THEME["bg_elevated"], fg=THEME["text_secondary"], command=self._clear_search)
+        clear_btn.pack(side="left", padx=10)
 
         self.count_label = StyledWidgets.create_badge(toolbar_inner, "0 Students", THEME["bg_elevated"], THEME["text_secondary"])
         self.count_label.pack(side="right", padx=(15, 0))
@@ -115,6 +118,10 @@ class StudentListFrame(tk.Frame):
         if "Search" in query: query = ""
         self._load_students(query if query else None)
 
+    def _clear_search(self):
+        self.search_var.set("")
+        self._load_students()
+
     def _get_selected(self):
         sel = self.tree.selection()
         if not sel:
@@ -129,11 +136,16 @@ class StudentListFrame(tk.Frame):
 
     def _on_delete_student(self):
         sid = self._get_selected()
-        if not sid: return
+        if not sid:
+            return
         student = self.db.get_student_by_id(sid)
-        if messagebox.askyesno("Confirm", f"Delete student {student.name}?\nThis action cannot be undone.", parent=self):
-            self.db.delete_student(sid)
-            self._load_students()
+        if messagebox.askyesno("Confirm Delete", f"Delete student '{student.name}'?\n\nThis action cannot be undone.", parent=self):
+            try:
+                self.db.delete_student(sid)
+                messagebox.showinfo("Success", "Student deleted successfully.", parent=self)
+                self._load_students()
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to delete student:\n{str(e)}", parent=self)
 
     def _on_view_result(self):
         sid = self._get_selected()
@@ -143,19 +155,22 @@ class StudentListFrame(tk.Frame):
 
     def _on_export_pdf(self):
         sid = self._get_selected()
-        if not sid: return
+        if not sid:
+            return
         s = self.db.get_student_by_id(sid)
         m = self.db.get_marks(sid)
         if not m:
-            messagebox.showwarning("Notice", "No marks found for this student.", parent=self)
+            messagebox.showwarning("No Marks", "No marks found for this student. Add marks to generate a report.", parent=self)
             return
         try:
             from utils import export_to_pdf
             rank = next((r for st, _, r in self.db.get_ranked_students() if st.id == sid), None)
             path = export_to_pdf(s, m, rank=rank)
-            messagebox.showinfo("Success", f"Exported to:\n{path}", parent=self)
+            messagebox.showinfo("Success", f"Report exported successfully!\n\n{path}", parent=self)
+        except ImportError:
+            messagebox.showerror("Missing Dependency", "fpdf2 is required for PDF export.\n\nRun: pip install fpdf2", parent=self)
         except Exception as e:
-            messagebox.showerror("Error", str(e), parent=self)
+            messagebox.showerror("Export Error", f"Failed to export report:\n{str(e)}", parent=self)
 
 
 class StudentFormFrame(tk.Frame):
@@ -241,34 +256,83 @@ class StudentFormFrame(tk.Frame):
         # ── Action Buttons ────────────────────────────────────────
         bot = tk.Frame(self, bg=THEME["bg"])
         bot.pack(fill="x", padx=40, pady=30)
-        
+
+        StyledWidgets.create_button(
+            bot, "Reset Form", bg=THEME["bg_elevated"], fg=THEME["text"],
+            icon="🔄", command=self._on_reset
+        ).pack(side="left", padx=(0, 10))
+
+        tk.Frame(bot, bg=THEME["bg"]).pack(side="left", fill="x", expand=True)
+
         StyledWidgets.create_button(
             bot, "Save Student Record", icon="💾", padx=30, pady=10,
             command=self._on_save
         ).pack(side="right")
 
     def _update_preview(self, e=None):
-        total = sum((float(e.get()) for e in self.mark_entries.values() if e.get().replace('.','',1).isdigit()))
+        total = 0
+        for entry in self.mark_entries.values():
+            try:
+                val = float(entry.get()) if entry.get().strip() else 0
+                if 0 <= val <= 100:
+                    total += val
+            except (ValueError, AttributeError):
+                pass
         pct = (total / 500) * 100
         g = "A+" if pct>=90 else "A" if pct>=80 else "B+" if pct>=70 else "B" if pct>=60 else "C" if pct>=50 else "D" if pct>=40 else "F"
         self.p_lbl.config(text=f"Score: {total:.0f}/500    •    Percentage: {pct:.1f}%    •    Grade: {g}")
+
+    def _on_reset(self):
+        if self.editing:
+            self.entries["roll"].delete(0, "end")
+            self.entries["roll"].insert(0, self.student.roll_number)
+            self.entries["name"].delete(0, "end")
+            self.entries["name"].insert(0, self.student.name)
+            self.entries["email"].delete(0, "end")
+            self.entries["email"].insert(0, self.student.email)
+            self.entries["phone"].delete(0, "end")
+            self.entries["phone"].insert(0, self.student.phone)
+            self.entries["class"].delete(0, "end")
+            self.entries["class"].insert(0, self.student.class_name)
+            for i in range(5):
+                self.mark_entries[f"s{i}"].delete(0, "end")
+                self.mark_entries[f"s{i}"].insert(0, str(getattr(self.marks, f"subject{i+1}")) if self.marks else "0")
+        else:
+            for entry in self.entries.values():
+                entry.delete(0, "end")
+            for entry in self.mark_entries.values():
+                entry.delete(0, "end")
+                entry.insert(0, "0")
+        self._update_preview()
 
     def _on_save(self):
         try:
             roll, name = self.entries["roll"].get().strip(), self.entries["name"].get().strip()
             validate_student_fields(roll, name)
-            m_vals = [validate_marks(self.mark_entries[f"s{i}"].get()) for i in range(5)]
-            
+
+            marks_vals = []
+            for i in range(5):
+                try:
+                    val = float(self.mark_entries[f"s{i}"].get().strip())
+                    marks_vals.append(validate_marks(str(val)))
+                except ValueError:
+                    raise ValueError(f"Invalid marks for subject {i+1}")
+
             if self.editing:
                 self.db.update_student(Student(self.student_id, roll, name, self.entries["email"].get(), self.entries["phone"].get(), self.entries["class"].get()))
-                m = Marks(self.student_id, *m_vals)
-                self.db.update_marks(m) if self.db.get_marks(self.student_id) else self.db.add_marks(m)
+                m = Marks(self.student_id, *marks_vals)
+                if self.db.get_marks(self.student_id):
+                    self.db.update_marks(m)
+                else:
+                    self.db.add_marks(m)
+                messagebox.showinfo("Success", "Student record updated successfully!", parent=self)
             else:
                 sid = self.db.add_student(Student(roll, name, self.entries["email"].get(), self.entries["phone"].get(), self.entries["class"].get()))
-                self.db.add_marks(Marks(sid, *m_vals))
-            
+                self.db.add_marks(Marks(sid, *marks_vals))
+                messagebox.showinfo("Success", "New student added successfully!", parent=self)
+
             self.app.show_frame(StudentListFrame)
         except ValueError as e:
-            messagebox.showerror("Validation", str(e), parent=self)
+            messagebox.showerror("Validation Error", str(e), parent=self)
         except Exception as e:
-            messagebox.showerror("Error", str(e), parent=self)
+            messagebox.showerror("Error", f"Failed to save: {str(e)}", parent=self)

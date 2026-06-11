@@ -25,9 +25,12 @@ class DashboardFrame(tk.Frame):
         self.scroll_frame = tk.Frame(canvas, bg=THEME["bg"])
 
         self.scroll_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-        canvas.create_window((0, 0), window=self.scroll_frame, anchor="nw", width=canvas.winfo_width())
-        self.bind("<Configure>", lambda e: canvas.itemconfig(canvas.find_all()[0], width=e.width))
-        
+        self.canvas_window = canvas.create_window((0, 0), window=self.scroll_frame, anchor="nw")
+
+        def on_canvas_configure(e):
+            canvas.itemconfig(self.canvas_window, width=e.width)
+
+        canvas.bind("<Configure>", on_canvas_configure)
         canvas.configure(yscrollcommand=scrollbar.set)
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
